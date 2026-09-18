@@ -10,8 +10,8 @@ app = Flask(__name__)
 # --- MƏLUMAT MƏNBƏYİ (API) ÜÇÜN KONFİQURASİYA ---
 # VACİB: Buraya öz API açarınızı daxil edin. Cryptocompare, CoinGecko və ya TradingView API istifadə edə bilərsiniz.
 # OTC cütlükləri bəzən məhdud olur, buna görə dəqiq məlumat verən mənbə seçin.
-API_KEY = "YOUR_API_KEY_HERE"  # HƏQİQİ AÇARINIZI BURAYA YAZIN
-API_URL = "https://min-api.cryptocompare.com/data/v2/histominute"
+API_KEY = "5M4C3oZJaa3TnPUG8BOmVJ6Ex63GFFjb"  # HƏQİQİ AÇARINIZI BURAYA YAZIN
+API_URL = "https://site.financialmodelingprep.com/developer/docs/dashboard?tab=apiDetails"
 
 # Daxili keşləmə (API sorğularının sayını azaltmaq üçün)
 cache = {
