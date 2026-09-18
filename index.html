@@ -3,83 +3,251 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Chart Signal Analyzer</title>
+<title>Pocket Option Live Scanner</title>
 <style>
-body{font-family:Arial,sans-serif;background:#0b1020;color:#fff;margin:0}
-.wrap{max-width:760px;margin:auto;padding:22px}
-.card{background:#141b2f;border:1px solid #26314e;border-radius:18px;padding:18px;margin-bottom:16px}
-h1{margin:0 0 6px}.muted{color:#9ba8c7}
-label{display:block;margin:12px 0 6px}
-select,input,button{width:100%;box-sizing:border-box;padding:13px;border-radius:10px;border:1px solid #35415f;background:#0d1426;color:#fff}
-button{background:#2563eb;border:0;font-weight:700;cursor:pointer;margin-top:15px}
-button:disabled{opacity:.5}
-#preview{max-width:100%;max-height:420px;border-radius:12px;margin-top:12px;display:none}
-.result{display:none}.signal{font-size:30px;font-weight:800;margin:8px 0}
-.grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}.box{background:#0d1426;border-radius:10px;padding:12px}
-pre{white-space:pre-wrap;font-family:inherit;line-height:1.45}
+*{box-sizing:border-box}
+body{margin:0;background:#0b1020;color:#eef2ff;font-family:Arial,sans-serif}
+.wrap{max-width:1050px;margin:auto;padding:18px}
+h1{margin:0 0 6px;font-size:24px}
+.sub{color:#aab3cc;margin-bottom:18px}
+.card{background:#121a2e;border:1px solid #263250;border-radius:16px;padding:16px;margin-bottom:14px}
+.row{display:flex;gap:10px;flex-wrap:wrap;align-items:end}
+label{font-size:12px;color:#aab3cc;display:block;margin-bottom:5px}
+select,button{height:44px;border-radius:10px;border:1px solid #34415f;background:#0d1425;color:#fff;padding:0 13px}
+button{cursor:pointer;font-weight:700}
+button.primary{background:#2457d6;border-color:#2457d6}
+button.stop{background:#8d2632;border-color:#8d2632}
+button:disabled{opacity:.5;cursor:not-allowed}
+video{width:100%;max-height:55vh;background:#050811;border-radius:12px;display:block}
+.status{display:flex;gap:12px;flex-wrap:wrap;margin-top:10px;color:#aab3cc;font-size:13px}
+.signal{font-size:36px;font-weight:900;margin:5px 0}
+.call{color:#43d17b}.put{color:#ff6576}.wait{color:#ffd166}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:10px}
+.box{background:#0d1425;border-radius:12px;padding:12px}
+.k{font-size:11px;color:#8994b0}.v{margin-top:5px;font-weight:700;white-space:pre-wrap}
+.reason{line-height:1.45;color:#dbe2f4}
+.small{font-size:12px;color:#8f9ab4}
+#history{max-height:230px;overflow:auto}
+.item{padding:8px 0;border-bottom:1px solid #263250;font-size:13px}
+.warn{color:#ffd166}
+.ok{color:#6ee7a0}
 </style>
 </head>
 <body>
 <div class="wrap">
-<div class="card">
-<h1>📊 Chart Signal Analyzer</h1>
-<div class="muted">Screenshot əsaslı texniki analiz</div>
-<label>Aktiv</label>
-<select id="asset">
-<option>GBP/USD OTC</option><option>EUR/USD OTC</option><option>USD/JPY OTC</option>
-<option>AUD/USD OTC</option><option>USD/CAD OTC</option><option>GBP/JPY OTC</option>
-<option>EUR/USD</option><option>GBP/USD</option><option>USD/JPY</option><option>XAU/USD</option>
-</select>
-<label>Müddət</label>
-<select id="duration"><option>30 seconds</option><option>1 minute</option></select>
-<label>Qrafik screenshot-u</label>
-<input id="image" type="file" accept="image/png,image/jpeg,image/webp">
-<img id="preview">
-<button id="go">ANALİZ ET</button>
+  <h1>📡 Pocket Option Live Chart Scanner</h1>
+  <div class="sub">Canlı ekran görüntüsündən analiz • yalnız siqnal/analiz, avtomatik əməliyyat etmir.</div>
+
+  <div class="card">
+    <div class="row">
+      <div>
+        <label>Aktiv</label>
+        <select id="asset">
+          <option>GBP/USD OTC</option>
+          <option>EUR/USD OTC</option>
+          <option>GBP/JPY OTC</option>
+          <option>AUD/USD OTC</option>
+          <option>USD/JPY OTC</option>
+          <option>USD/CAD OTC</option>
+          <option>USD/CHF OTC</option>
+          <option>EUR/JPY OTC</option>
+          <option>AUD/JPY OTC</option>
+          <option>NZD/USD OTC</option>
+        </select>
+      </div>
+      <div>
+        <label>Müddət</label>
+        <select id="duration">
+          <option>30 seconds</option>
+          <option>1 minute</option>
+        </select>
+      </div>
+      <div>
+        <label>Scan interval</label>
+        <select id="interval">
+          <option value="1500">1.5 saniyə</option>
+          <option value="2000" selected>2 saniyə</option>
+          <option value="3000">3 saniyə</option>
+        </select>
+      </div>
+      <button class="primary" id="start">▶ Live Scanner başlat</button>
+      <button class="stop" id="stop" disabled>■ Dayandır</button>
+    </div>
+    <div class="status">
+      <span id="captureStatus">Ekran paylaşımı: bağlı deyil</span>
+      <span id="scanStatus">Scanner: dayandırılıb</span>
+      <span id="confirmStatus">Təsdiq: —</span>
+    </div>
+  </div>
+
+  <div class="card">
+    <video id="preview" autoplay muted playsinline></video>
+    <div class="small" style="margin-top:8px">
+      Start düyməsinə basanda brauzer ekran seçimi açılacaq. Pocket Option-un chart olan tabını/pəncərəsini paylaş.
+    </div>
+  </div>
+
+  <div class="card">
+    <div id="signal" class="signal wait">WAIT</div>
+    <div class="grid">
+      <div class="box"><div class="k">Analitik confidence</div><div class="v" id="confidence">—</div></div>
+      <div class="box"><div class="k">Trend</div><div class="v" id="trend">—</div></div>
+      <div class="box"><div class="k">Timeframe görünür?</div><div class="v" id="tf">—</div></div>
+      <div class="box"><div class="k">Data quality</div><div class="v" id="quality">—</div></div>
+      <div class="box"><div class="k">Support</div><div class="v" id="support">—</div></div>
+      <div class="box"><div class="k">Resistance</div><div class="v" id="resistance">—</div></div>
+    </div>
+    <div style="margin-top:12px"><div class="k">Reasoning</div><div class="reason" id="reason">Scanner başladıqdan sonra nəticə burada görünəcək.</div></div>
+    <div style="margin-top:12px"><div class="k">Risk flags</div><div class="reason warn" id="risk">—</div></div>
+  </div>
+
+  <div class="card">
+    <b>Son skanlar</b>
+    <div id="history" class="small" style="margin-top:8px">Hələ nəticə yoxdur.</div>
+  </div>
 </div>
-<div class="card result" id="result">
-<div id="signal" class="signal"></div>
-<div class="grid">
-<div class="box"><b>Confidence</b><div id="confidence"></div></div>
-<div class="box"><b>Data quality</b><div id="quality"></div></div>
-</div>
-<pre id="details"></pre>
-</div>
-</div>
+
 <script>
-const file=document.getElementById('image'), preview=document.getElementById('preview');
-file.onchange=()=>{if(file.files[0]){preview.src=URL.createObjectURL(file.files[0]);preview.style.display='block'}};
-document.getElementById('go').onclick=async()=>{
- if(!file.files[0]) return alert('Əvvəl screenshot seç.');
- const btn=document.getElementById('go'); btn.disabled=true; btn.textContent='ANALİZ EDİLİR...';
- const fd=new FormData();
- fd.append('image',file.files[0]); fd.append('asset',document.getElementById('asset').value);
- fd.append('duration',document.getElementById('duration').value);
- try{
-  const r=await fetch('/analyze',{method:'POST',body:fd}); const x=await r.json();
-  if(!r.ok) throw new Error(x.detail||'Xəta');
-  document.getElementById('result').style.display='block';
-  document.getElementById('signal').textContent=x.signal+' — '+x.duration;
-  document.getElementById('confidence').textContent=x.confidence+' / 100';
-  document.getElementById('quality').textContent=x.data_quality;
-  document.getElementById('details').textContent=
-`Trend: ${x.trend}
-Support: ${x.support}
-Resistance: ${x.resistance}
+const video = document.getElementById('preview');
+const canvas = document.createElement('canvas');
+const ctx = canvas.getContext('2d', {alpha:false});
+let stream = null;
+let timer = null;
+let busy = false;
+let running = false;
+let lastSignal = 'WAIT';
+let sameCount = 0;
+let scanNo = 0;
 
-Patterns:
-${(x.patterns||[]).map(v=>'• '+v).join('\\n')}
+const $ = id => document.getElementById(id);
 
-Indicators:
-${(x.indicators||[]).map(v=>'• '+v).join('\\n')}
+function setSignal(s) {
+  const el = $('signal');
+  el.textContent = s;
+  el.className = 'signal ' + (s === 'CALL' ? 'call' : s === 'PUT' ? 'put' : 'wait');
+}
 
-Reasoning:
-${x.reasoning}
+function addHistory(result, confirmedSignal) {
+  const h = $('history');
+  if (h.textContent === 'Hələ nəticə yoxdur.') h.textContent = '';
+  const d = new Date().toLocaleTimeString();
+  const div = document.createElement('div');
+  div.className = 'item';
+  div.textContent = `${d} • ${result.signal} • conf ${result.confidence}% • təsdiqlənmiş: ${confirmedSignal}`;
+  h.prepend(div);
+  while (h.children.length > 30) h.lastChild.remove();
+}
 
-Risk flags:
-${(x.risk_flags||[]).map(v=>'• '+v).join('\\n')}`;
- }catch(e){alert(e.message)}
- finally{btn.disabled=false;btn.textContent='ANALİZ ET'}
-};
+function showResult(r, confirmed) {
+  setSignal(confirmed);
+  $('confidence').textContent = r.confidence + '%';
+  $('trend').textContent = r.trend ?? '—';
+  $('tf').textContent = r.timeframe_visible ?? '—';
+  $('quality').textContent = r.data_quality ?? '—';
+  $('support').textContent = r.support ?? '—';
+  $('resistance').textContent = r.resistance ?? '—';
+  $('reason').textContent = r.reasoning ?? '—';
+  $('risk').textContent = Array.isArray(r.risk_flags) ? r.risk_flags.join(' • ') : (r.risk_flags ?? '—');
+  $('confirmStatus').textContent = `Təsdiq: ${sameCount}/2`;
+  addHistory(r, confirmed);
+}
+
+async function captureFrame() {
+  if (!running || busy || !stream || video.readyState < 2) return;
+  busy = true;
+  scanNo++;
+
+  const maxW = 1280;
+  const vw = video.videoWidth || 1280;
+  const vh = video.videoHeight || 720;
+  const scale = Math.min(1, maxW / vw);
+  canvas.width = Math.round(vw * scale);
+  canvas.height = Math.round(vh * scale);
+  ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+  canvas.toBlob(async blob => {
+    try {
+      const fd = new FormData();
+      fd.append('image', blob, 'frame.jpg');
+      fd.append('asset', $('asset').value);
+      fd.append('duration', $('duration').value);
+
+      $('scanStatus').textContent = `Scanner: analiz edilir (#${scanNo})…`;
+      const res = await fetch('/analyze-frame', {method:'POST', body:fd});
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Server xətası');
+
+      if (data.signal === lastSignal && data.signal !== 'WAIT') sameCount++;
+      else if (data.signal !== 'WAIT') sameCount = 1;
+      else sameCount = 0;
+
+      lastSignal = data.signal;
+
+      // Two consecutive matching analyses are required before showing CALL/PUT.
+      // This is a noise filter, not a guarantee of accuracy.
+      const confirmed = (data.signal !== 'WAIT' && sameCount >= 2) ? data.signal : 'WAIT';
+      showResult(data, confirmed);
+
+      $('scanStatus').textContent = `Scanner: aktiv • son analiz ${new Date().toLocaleTimeString()}`;
+    } catch (e) {
+      $('scanStatus').textContent = 'Scanner xətası: ' + e.message;
+    } finally {
+      busy = false;
+    }
+  }, 'image/jpeg', 0.68);
+}
+
+async function startScanner() {
+  if (!navigator.mediaDevices || !navigator.mediaDevices.getDisplayMedia) {
+    alert('Bu brauzer ekran paylaşımını dəstəkləmir. HTTPS üzərindən müasir Chrome/Edge istifadə et.');
+    return;
+  }
+
+  try {
+    stream = await navigator.mediaDevices.getDisplayMedia({
+      video: {frameRate: 5},
+      audio: false
+    });
+
+    video.srcObject = stream;
+    running = true;
+    $('start').disabled = true;
+    $('stop').disabled = false;
+    $('captureStatus').textContent = 'Ekran paylaşımı: aktiv';
+    $('scanStatus').textContent = 'Scanner: başlayır…';
+
+    const track = stream.getVideoTracks()[0];
+    track.addEventListener('ended', stopScanner);
+
+    await video.play();
+    const ms = Number($('interval').value);
+    timer = setInterval(captureFrame, ms);
+    captureFrame();
+  } catch (e) {
+    $('captureStatus').textContent = 'Ekran paylaşımı: ləğv edildi';
+    $('scanStatus').textContent = e.message;
+  }
+}
+
+function stopScanner() {
+  running = false;
+  if (timer) clearInterval(timer);
+  timer = null;
+  if (stream) stream.getTracks().forEach(t => t.stop());
+  stream = null;
+  video.srcObject = null;
+  $('start').disabled = false;
+  $('stop').disabled = true;
+  $('captureStatus').textContent = 'Ekran paylaşımı: bağlı deyil';
+  $('scanStatus').textContent = 'Scanner: dayandırılıb';
+  sameCount = 0;
+  lastSignal = 'WAIT';
+  $('confirmStatus').textContent = 'Təsdiq: —';
+  setSignal('WAIT');
+}
+
+$('start').onclick = startScanner;
+$('stop').onclick = stopScanner;
 </script>
-</body></html>
+</body>
+</html>

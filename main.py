@@ -1,98 +1,118 @@
-import os, base64, json
-from fastapi import FastAPI, UploadFile, File, Form, HTTPException
-from fastapi.responses import HTMLResponse
+import base64
+import json
+import os
+from typing import Optional
+
+from fastapi import FastAPI, File, Form, UploadFile
+from fastapi.responses import HTMLResponse, JSONResponse
 from openai import OpenAI
 
-app = FastAPI(title="Chart Signal Analyzer")
-client = OpenAI(api_key=os.environ.get("OPENAI_API_KEY"))
+app = FastAPI(title="Pocket Option Live Chart Scanner")
+client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+MODEL = os.getenv("OPENAI_MODEL", "gpt-5.6-luna")
 
-ALLOWED_ASSETS = {
-    "GBP/USD OTC", "EUR/USD OTC", "USD/JPY OTC",
-    "AUD/USD OTC", "USD/CAD OTC", "GBP/JPY OTC",
-    "EUR/USD", "GBP/USD", "USD/JPY", "XAU/USD"
-}
-ALLOWED_DURATIONS = {"30 seconds", "1 minute"}
+SYSTEM_PROMPT = """
+You are a chart-reading assistant for Pocket Option screenshots.
+This is ANALYSIS ONLY. Never claim certainty, guaranteed profit, or 100% accuracy.
+The screenshot is the only market data source. Do not invent prices, candles, indicators,
+support/resistance, or timeframes that are not visible.
 
-SYSTEM_PROMPT = """You are a cautious technical-analysis assistant.
-Analyze ONLY the chart image supplied by the user. Do not invent candles, prices,
-indicators, news, or market data that are not visible. The requested duration is
-very short (30 seconds or 1 minute), so explicitly account for uncertainty.
-
-Return JSON with:
-signal: one of CALL, PUT, WAIT
-duration: requested duration
-asset: requested asset
-confidence: integer 0-100, representing analytical confidence, NOT probability of profit
-trend: short text
-support: short text
-resistance: short text
-patterns: array of observed patterns
-indicators: array of observations; if an indicator is not visible, say unavailable
-reasoning: concise explanation
-risk_flags: array
-data_quality: HIGH, MEDIUM, or LOW
+Return ONLY valid JSON with exactly these keys:
+signal, confidence, trend, timeframe_visible, support, resistance,
+patterns, indicators, reasoning, risk_flags, data_quality
 
 Rules:
-- Never claim certainty or guaranteed profit.
-- Never fabricate exact prices or indicator values.
-- If the screenshot is unclear, choose WAIT and data_quality LOW.
-- For OTC, state that screenshot-based analysis cannot independently verify the
-  platform's OTC price feed.
-- CALL/PUT are analytical directions only, not guaranteed outcomes.
+- signal must be exactly CALL, PUT, or WAIT.
+- confidence is 0-100 analytical confidence, NOT probability of profit.
+- For 30s/1m decisions, be conservative. If the chart is unclear, timeframe is not visible,
+  candles are too small, or evidence conflicts, use WAIT.
+- Prefer WAIT over a weak signal.
+- Examine recent candle direction, candle bodies/wicks, momentum, visible support/resistance,
+  EMA/RSI/MACD or other indicators only if actually visible.
+- Do not invent an indicator value.
+- If an indicator is not visible, say "not visible".
+- Explain the main evidence briefly.
+"""
+
+def make_prompt(asset: str, duration: str) -> str:
+    return f"""
+Asset selected by the user: {asset}
+Requested trade duration: {duration}
+
+Analyze the latest visible chart. Focus on the most recent candles and the immediate
+context. If the selected asset/timeframe cannot be verified from the screenshot, lower
+data_quality and use WAIT.
+
+Important: this is not a guarantee of what the next candle will do. Return JSON only.
 """
 
 @app.get("/", response_class=HTMLResponse)
-def home():
-    return HTMLResponse(open("index.html", encoding="utf-8").read())
+def index():
+    return Path("index.html").read_text(encoding="utf-8")
 
-@app.post("/analyze")
-async def analyze(
+@app.get("/health")
+def health():
+    return {"ok": True, "model": MODEL}
+
+@app.post("/analyze-frame")
+async def analyze_frame(
     image: UploadFile = File(...),
-    asset: str = Form(...),
-    duration: str = Form(...)
+    asset: str = Form("GBP/USD OTC"),
+    duration: str = Form("30 seconds"),
 ):
-    if asset not in ALLOWED_ASSETS:
-        raise HTTPException(400, "Unsupported asset")
-    if duration not in ALLOWED_DURATIONS:
-        raise HTTPException(400, "Unsupported duration")
-    if not os.environ.get("OPENAI_API_KEY"):
-        raise HTTPException(500, "OPENAI_API_KEY is not configured")
+    if not os.getenv("OPENAI_API_KEY"):
+        return JSONResponse({"error": "OPENAI_API_KEY Render Environment Variable yoxdur."}, status_code=500)
 
     data = await image.read()
-    if len(data) > 12 * 1024 * 1024:
-        raise HTTPException(400, "Image is too large")
+    if not data:
+        return JSONResponse({"error": "Boş görüntü göndərildi."}, status_code=400)
 
-    mime = image.content_type or "image/png"
-    if mime not in {"image/png", "image/jpeg", "image/webp"}:
-        raise HTTPException(400, "Use PNG, JPG or WEBP")
+    if len(data) > 5_000_000:
+        return JSONResponse({"error": "Şəkil çox böyükdür. Brauzer sıxışdırması işləməyib."}, status_code=413)
 
-    b64 = base64.b64encode(data).decode()
-    prompt = f"""Asset: {asset}
-Requested operation duration: {duration}
+    mime = image.content_type or "image/jpeg"
+    if mime not in {"image/jpeg", "image/png", "image/webp"}:
+        mime = "image/jpeg"
 
-Analyze the supplied screenshot. Focus on the most recent visible candles and
-the timeframe shown on the chart. Combine price structure, trend, support/resistance,
-and any visible indicators. Do not assume a timeframe that is not visible.
-Because this is a very short-duration request, prefer WAIT when the evidence is mixed."""
+    b64 = base64.b64encode(data).decode("ascii")
 
     try:
-        response = client.responses.create(
-            model=os.environ.get("OPENAI_MODEL", "gpt-5.6-luna"),
-            input=[{
-                "role": "system",
-                "content": [{"type": "input_text", "text": SYSTEM_PROMPT}]
-            }, {
-                "role": "user",
-                "content": [
-                    {"type": "input_text", "text": prompt},
-                    {"type": "input_image",
-                     "image_url": f"data:{mime};base64,{b64}",
-                     "detail": "high"}
-                ]
-            }],
-            text={"format": {"type": "json_object"}}
+        response = client.chat.completions.create(
+            model=MODEL,
+            temperature=0.1,
+            response_format={"type": "json_object"},
+            messages=[
+                {"role": "system", "content": SYSTEM_PROMPT},
+                {
+                    "role": "user",
+                    "content": [
+                        {"type": "text", "text": make_prompt(asset, duration)},
+                        {
+                            "type": "image_url",
+                            "image_url": {
+                                "url": f"data:{mime};base64,{b64}",
+                                "detail": "high",
+                            },
+                        },
+                    ],
+                },
+            ],
         )
-        result = json.loads(response.output_text)
+        raw = response.choices[0].message.content
+        result = json.loads(raw)
+
+        allowed = {"CALL", "PUT", "WAIT"}
+        if result.get("signal") not in allowed:
+            result["signal"] = "WAIT"
+
+        try:
+            result["confidence"] = max(0, min(100, int(result.get("confidence", 0))))
+        except Exception:
+            result["confidence"] = 0
+
+        result["asset"] = asset
+        result["duration"] = duration
         return result
+
     except Exception as e:
-        raise HTTPException(500, f"Analysis failed: {str(e)}")
+        return JSONResponse({"error": str(e)}, status_code=500)
