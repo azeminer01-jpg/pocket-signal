@@ -1,0 +1,85 @@
+<!doctype html>
+<html lang="az">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Chart Signal Analyzer</title>
+<style>
+body{font-family:Arial,sans-serif;background:#0b1020;color:#fff;margin:0}
+.wrap{max-width:760px;margin:auto;padding:22px}
+.card{background:#141b2f;border:1px solid #26314e;border-radius:18px;padding:18px;margin-bottom:16px}
+h1{margin:0 0 6px}.muted{color:#9ba8c7}
+label{display:block;margin:12px 0 6px}
+select,input,button{width:100%;box-sizing:border-box;padding:13px;border-radius:10px;border:1px solid #35415f;background:#0d1426;color:#fff}
+button{background:#2563eb;border:0;font-weight:700;cursor:pointer;margin-top:15px}
+button:disabled{opacity:.5}
+#preview{max-width:100%;max-height:420px;border-radius:12px;margin-top:12px;display:none}
+.result{display:none}.signal{font-size:30px;font-weight:800;margin:8px 0}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}.box{background:#0d1426;border-radius:10px;padding:12px}
+pre{white-space:pre-wrap;font-family:inherit;line-height:1.45}
+</style>
+</head>
+<body>
+<div class="wrap">
+<div class="card">
+<h1>📊 Chart Signal Analyzer</h1>
+<div class="muted">Screenshot əsaslı texniki analiz</div>
+<label>Aktiv</label>
+<select id="asset">
+<option>GBP/USD OTC</option><option>EUR/USD OTC</option><option>USD/JPY OTC</option>
+<option>AUD/USD OTC</option><option>USD/CAD OTC</option><option>GBP/JPY OTC</option>
+<option>EUR/USD</option><option>GBP/USD</option><option>USD/JPY</option><option>XAU/USD</option>
+</select>
+<label>Müddət</label>
+<select id="duration"><option>30 seconds</option><option>1 minute</option></select>
+<label>Qrafik screenshot-u</label>
+<input id="image" type="file" accept="image/png,image/jpeg,image/webp">
+<img id="preview">
+<button id="go">ANALİZ ET</button>
+</div>
+<div class="card result" id="result">
+<div id="signal" class="signal"></div>
+<div class="grid">
+<div class="box"><b>Confidence</b><div id="confidence"></div></div>
+<div class="box"><b>Data quality</b><div id="quality"></div></div>
+</div>
+<pre id="details"></pre>
+</div>
+</div>
+<script>
+const file=document.getElementById('image'), preview=document.getElementById('preview');
+file.onchange=()=>{if(file.files[0]){preview.src=URL.createObjectURL(file.files[0]);preview.style.display='block'}};
+document.getElementById('go').onclick=async()=>{
+ if(!file.files[0]) return alert('Əvvəl screenshot seç.');
+ const btn=document.getElementById('go'); btn.disabled=true; btn.textContent='ANALİZ EDİLİR...';
+ const fd=new FormData();
+ fd.append('image',file.files[0]); fd.append('asset',document.getElementById('asset').value);
+ fd.append('duration',document.getElementById('duration').value);
+ try{
+  const r=await fetch('/analyze',{method:'POST',body:fd}); const x=await r.json();
+  if(!r.ok) throw new Error(x.detail||'Xəta');
+  document.getElementById('result').style.display='block';
+  document.getElementById('signal').textContent=x.signal+' — '+x.duration;
+  document.getElementById('confidence').textContent=x.confidence+' / 100';
+  document.getElementById('quality').textContent=x.data_quality;
+  document.getElementById('details').textContent=
+`Trend: ${x.trend}
+Support: ${x.support}
+Resistance: ${x.resistance}
+
+Patterns:
+${(x.patterns||[]).map(v=>'• '+v).join('\\n')}
+
+Indicators:
+${(x.indicators||[]).map(v=>'• '+v).join('\\n')}
+
+Reasoning:
+${x.reasoning}
+
+Risk flags:
+${(x.risk_flags||[]).map(v=>'• '+v).join('\\n')}`;
+ }catch(e){alert(e.message)}
+ finally{btn.disabled=false;btn.textContent='ANALİZ ET'}
+};
+</script>
+</body></html>
